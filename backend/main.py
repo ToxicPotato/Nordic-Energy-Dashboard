@@ -4,6 +4,9 @@ from contextlib import asynccontextmanager
 from config import settings
 from .scheduler import init_scheduler
 
+from backend.api.prices import router as prices_router
+from backend.api.regions import router as regions_router
+
 _scheduler = None
 
 @asynccontextmanager
@@ -38,3 +41,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(regions_router)
+app.include_router(prices_router)

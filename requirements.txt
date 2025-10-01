@@ -1,3 +1,9 @@
-APScheduler
 fastapi
-uvicorn
+uvicorn[standard]
+sqlalchemy>=2.0
+psycopg[binary]
+python-dotenv
+pydantic
+python-dateutil
+apscheduler
+requests
