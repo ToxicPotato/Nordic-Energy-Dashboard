@@ -1,13 +1,40 @@
-import requests
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+from config import settings
+from .scheduler import init_scheduler
 
-api_url = "https://www.hvakosterstrommen.no/api/v1/prices/2025/09-30_NO5.json" 
+_scheduler = None
 
-response = requests.get(api_url) 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _scheduler
+    if settings.enable_scheduler:
+        _scheduler = init_scheduler(
+            cron=settings.schedule_cron,
+            tz=settings.sched_tz,
+            regions=settings.regions,
+            fetch_date_mode=settings.fetch_date_mode,
+        )
+        _scheduler.start()
+        print("[scheduler] started")
+    else:
+        print("[scheduler] disabled (config.enable_scheduler = false)")
+    try:
+        yield
+    finally:
+        if _scheduler:
+            _scheduler.shutdown(wait=False)
+            print("[scheduler] stopped")
 
-if response.status_code == 200:
-    data = response.json()
-    print("API call successful. Data received:")
-    print(data)
-else:
-    print(f"API call failed with status code: {response.status_code}")
-    print(f"Error message: {response.text}") 
+app = FastAPI(title="Nordic Energy Dashboard", version="0.1.0", lifespan=lifespan)
+
+# CORS for lokal frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
