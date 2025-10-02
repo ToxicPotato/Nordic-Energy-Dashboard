@@ -35,6 +35,7 @@ uvicorn backend.main:app --reload
 cd frontend
 npm run dev
 ```
+- Website UI: http://localhost:5173
 
 ## Directory Structure
 
