@@ -2,59 +2,87 @@
 
 A small, holistic project: fetches hourly electricity prices from a public source, stores them locally, and exposes them via an API which the frontend displays in a simple dashboard.
 
+## Quick start (development)
+
+**Prerequisites**z
+- Python 3.11+
+- Docker Desktop (for local PostgreSQL)
+- `config.yaml` at the repo root (use `default` or set `APP_ENV=dev`)
+
+### 1) Start PostgreSQL (Docker)
+```bash
+docker compose up -d
+```
+
+### 2) Install Python dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 3) Initialize database tables (one-time)
+```bash
+python -m backend.init_db
+```
+
+### 4) Run the API (FastAPI)
+```bash
+uvicorn backend.main:app --reload
+```
+- Swagger UI: http://127.0.0.1:8000/docs
+
+
 ## Directory Structure
 
 ```
-/                     # Repository root (README, license, CI, etc.)
-├─ backend/           # API, data models, and database access
-│  ├─ api/            # FastAPI routers/endpoints (e.g. /prices)
-│  ├─ models.py       # ORM models (tables/entities)
-│  ├─ crud.py         # Read/write DB (Create/Read/Update/Delete)
-│  ├─ db.py           # DB connection, session handling
-│  └─ main.py         # FastAPI app, CORS, routing
+/                         # Repository root (README, license, CI, etc.)
+├─ backend/               # Backend API, data models, and database access
+│  ├─ api/                # FastAPI routers/endpoints (e.g. /prices, /regions)
+│  │  ├─ prices.py        # Endpoints for price data
+│  │  └─ regions.py       # Endpoints for region data
+│  ├─ services/           # Ingest/normalization logic and scheduler helpers
+│  │  └─ ingest.py        # Functions to fetch and normalize data
+│  ├─ tests/              # Backend tests
+│  ├─ models.py           # ORM models (database tables/entities)
+│  ├─ crud.py             # CRUD operations (Create/Read/Update/Delete) for DB
+│  ├─ db.py               # Database connection and session management
+│  ├─ scheduler.py        # APScheduler setup (for scheduled jobs)
+│  ├─ init_db.py          # One-time script to initialize local DB tables
+│  └─ main.py             # FastAPI app entry point, CORS, routing, lifespan
 │
-├─ frontend/          # Client/dashboard (React/Vite etc.)
-│  ├─ src/            # Components, hooks, API calls
-│  ├─ index.html      # App entry point
-│  └─ package.json    # NPM scripts and dependencies
+├─ frontend/              # Client/dashboard (React/Vite etc.)
 │
-├─ scripts/           # Helper scripts for fetching/loading data
-│  └─ fetch_prices.py # Ingest: fetches prices for a given date/region and saves them
+├─ scripts/               # Helper scripts for data fetching/loading
+│  └─ fetch_prices.py     # Ingest script: fetches prices for date/region and saves to DB
 │
-├─ docs/              # Documentation, sketches, diagrams, decision log
-│  └─ architecture.md # (optional) Extended architecture description
+├─ docs/                  # Documentation, diagrams, decision records
 │
-├─ .github/workflows/ # CI workflows (lint, tests, build)
-├─ docker-compose.yml # Local startup of backend/frontend (optional)
-├─ requirements.txt   # Python dependencies
-└─ README.md          # This file
+├─ config.yaml            # Configuration (default + optional dev overlay)
+├─ config.py              # Loads config.yaml
+├─ docker-compose.yml     # Local Postgres setup (for development)
+├─ requirements.txt       # Python dependencies
+└─ README.md              # This file
 ```
 
 ## Purpose per folder (short and concrete)
 
 - **/backend**  
-  API and data access. This is where the FastAPI application, data models (ORM), and CRUD logic live.  
-  _Contribute here when_: creating new endpoints, changing data models/tables, or improving DB queries.
+  Backend application code: FastAPI app, data models (ORM), database access layer, CRUD, scheduler wiring.
 
 - **/backend/api**  
-  Routers (for example /regions, /prices).  
-  _Contribute here when_: exposing new functionality in the API or adjusting parameters/validation.
+  HTTP API layer (FastAPI routers). Defines the request/response contract and delegates to CRUD/services.
+
+- **/backend/services**  
+  Ingest and normalization logic used by the scheduler and manual scripts (fetch → normalize to UTC/1h → hand off to CRUD).
 
 - **/frontend**  
   Client (e.g. React) which calls the backend and displays graphs/KPIs.  
   _Contribute here when_: building UI components, fetching data from the API, or improving visualization/interactions.
 
 - **/scripts**  
-  Ingest/utility scripts (easy to run manually or scheduled).  
-  _Contribute here when_: creating or editing fetch scripts, data cleaning, or batch tasks.
+  Helper/CLI scripts for manual or batch operations (e.g., running ingest outside the scheduler). 
 
 - **/docs**  
-  Architecture, decisions (ADR), diagrams, and extended documentation.  
-  _Contribute here when_: making changes to architecture or needing a deeper explanation than the README.
-
-- **/.github/workflows**  
-  CI setup (build, lint, tests).  
-  _Contribute here when_: adding/updating automated checks.
+  Project documentation: architecture notes, diagrams, and decision records (ADR).
 
 - **Naming convention**: keep file and directory names lowercase (kebab_case/snake_case), and put tests in relevant folders (e.g. backend/tests if used).
 
@@ -63,27 +91,68 @@ A small, holistic project: fetches hourly electricity prices from a public sourc
 ## Data Flow (from source → dashboard)
 
 ```mermaid
-flowchart LR
-    A["Data source (public electricity price API)"] --> B["Ingest script (/scripts)"]
-    B -->|normalizes & validates| C["Database"]
-    C --> D["Backend API (backend)"]
-    D --> E["Frontend (frontend)"]
-    E -->|user fetches page / selects region| D
+flowchart TB
+    %% Kilder og klient
+    A["Data source<br/>(public electricity price API)"]
+    FE["Frontend<br/>(React)"]
+
+    %% Backend-lag
+    subgraph BACKEND
+      direction TB
+      S1["backend/scheduler.py<br/>(automatic)"]
+      S2["scripts/fetch_prices.py<br/>(manual/CLI)"]
+      INGEST["backend/services/ingest.py<br/>(fetch & normalize: UTC, 1h)"]
+      CRUD["backend/crud.py<br/>(read/write, upsert)"]
+      DB["Database<br/>(PostgreSQL)"]
+        subgraph API_layer["Backend API (FastAPI)"]
+          direction TB
+          PRICE["backend/api/prices.py<br/>(/api/prices)"]
+          REGION["backend/api/regions.py<br/>(/api/regions)"]
+        end
+    end
+
+    %% Kildedata inn til ingest
+    INGEST <--> |fetch hourly JSON|A
+
+    %% Orkestrering → Ingest
+    S1 --> INGEST
+    S2 --> INGEST
+
+    %% Ingest → lagring
+    INGEST -->|normalized rows| CRUD
+    CRUD -->|upsert| DB
+
+    %% API-rutere og lesing fra DB
+
+    CRUD  --> |read series / stats|PRICE 
+    CRUD --> |read regions|REGION
+    DB --> CRUD
+
+    %% Klient ↔ API
+    PRICE <-->|fetch series / stats| FE
+    REGION <-->|fetch regions| FE
 ```
 
 ### Step-by-step
+1. **Orchestration (two entry points)**
+  
+    - Automatic: `backend/scheduler.py` runs on a cron schedule from `config.yaml` and calls `backend/services/ingest.py`.
 
-1. **Ingest (scripts/fetch_prices.py)** fetches hourly prices for a selected date/region from a public API.  
-   – The script normalizes fields (time/price), and upserts (inserts or updates) rows to avoid duplication.
+    - Manual: `scripts/fetch_prices.py` can be run from the CLI and calls the same ingest functions.
 
-2. **Database** stores prices with a unique key per (region, timestamp).  
-   – This means the script can be run multiple times for the same date without duplicates.
+2. **Ingest & normalization (backend/services/ingest.py)** fetches hourly prices from the public source. Raw data is normalized: timestamps are converted to UTC, each record is validated to a 1-hour interval (`te = ts + 1h`), and rows are sorted ascending.
 
-3. **Backend (FastAPI)** exposes data to the frontend via endpoints, e.g.:
-   - `GET /api/regions` → available regions (NO1–NO5)
-   - `GET /api/prices?region=NO1&hours=24` → list of `{ ts, price }` for the last N hours
+3. **Storage (idempotent)** Ingest calls backend/crud.py, which upserts into PostgreSQL. Uniqueness is enforced on (region, start_ts_utc), so importing the same date multiple times does not create duplicates.
 
-4. **Frontend (React)** calls the API, renders a line graph and KPI cards (avg/min/max), and lets the user switch region/time period.
+4. **API layer** FastAPI in `backend/main.py` exposes:
+
+    - `GET /api/regions` (from `backend/api/regions.py`)
+
+    - `GET /api/prices` (from `backend/api/prices.py`) — supports `hours` (last N hours) or `from` / `to` (time range), plus stats (avg/min/max/count) over a range.
+    
+    Endpoints read via `crud` from the database (time series and aggregates).
+
+5. **Frontend** The React client fetches data from the API (selected region/time window), renders a line chart and KPI cards (average/min/max), and lets the user switch region/period.
 
 - **Time & timezone handling**: Timestamps are treated consistently (UTC) in storage and response. Frontend may format for local display.
 
@@ -94,7 +163,7 @@ flowchart LR
 **Add a new API endpoint:**
 - Model/CRUD in `/backend/models.py` + `/backend/crud.py`
 - Route in `/backend/api/...`
-- Update README and/or `docs/architecture.md` for major changes
+- Update README for major changes
 
 **Extend frontend:**
 - Create a new component in `/frontend/src/components`

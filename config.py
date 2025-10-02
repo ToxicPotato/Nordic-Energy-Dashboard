@@ -2,50 +2,55 @@ from __future__ import annotations
 from pathlib import Path
 import os
 import yaml
-from pydantic import BaseModel, Field, field_validator
-from typing import List
+from pydantic import BaseModel
+from typing import List, Optional
+
+CFG_PATH = Path(__file__).resolve().parent / "config.yaml"
 
 class Settings(BaseModel):
+    # --- Scheduler ---
     enable_scheduler: bool
     schedule_cron: str
     sched_tz: str
     regions: List[str]
     fetch_date_mode: str
 
-def load_settings() -> Settings:
-    root = Path(__file__).resolve().parent
-    cfg_path = root / "config.yaml"
-    with open(cfg_path, "r", encoding="utf-8") as f:
-        raw = yaml.safe_load(f) or {}
+    # --- DB ---
+    DATABASE_URL: Optional[str] = None
+    DB_USER: Optional[str] = None
+    DB_PASS: Optional[str] = None
+    DB_HOST: Optional[str] = None
+    DB_PORT: Optional[int] = None
+    DB_NAME: Optional[str] = None
+    DB_DRIVER: Optional[str] = None
 
+    # Creates the full database URL from parts if needed
+    def db_url(self) -> str:
+        if self.DATABASE_URL:
+            return self.DATABASE_URL
+        missing = [k for k in ("DB_USER","DB_PASS","DB_HOST","DB_PORT","DB_NAME","DB_DRIVER")
+                   if getattr(self, k) in (None, "")]
+        if missing:
+            raise ValueError(f"Mangler DB-felter i config.yaml: {', '.join(missing)}")
+        driver = "psycopg2" if self.DB_DRIVER == "psycopg2" else "psycopg"
+        return f"postgresql+{driver}://{self.DB_USER}:{self.DB_PASS}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+
+
+def _load_yaml(path: Path) -> dict:
+    if not path.exists():
+        raise FileNotFoundError(f"Mangler config-fil: {path}")
+    with path.open("r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+
+def load_settings() -> Settings:
+    raw = _load_yaml(CFG_PATH)
+
+    # Determine environment and merge settings
     env = os.getenv("APP_ENV", "default")
     base = raw.get("default", {}) or {}
     overlay = raw.get(env, {}) or {}
     merged = {**base, **overlay}
-
-    def _parse_bool_env(name: str) -> bool | None:
-        val = os.getenv(name)
-        if val is None:
-            return None
-        v = val.strip().lower()
-        if v in ("1","true","yes","on"):
-            return True
-        if v in ("0","false","no","off"):
-            return False
-        return None
-
-    env_bool = _parse_bool_env("ENABLE_SCHEDULER")
-    if env_bool is not None:
-        merged["enable_scheduler"] = env_bool
-        
-    if "SCHEDULE_CRON" in os.environ:
-        merged["schedule_cron"] = os.getenv("SCHEDULE_CRON")
-    if "SCHED_TZ" in os.environ:
-        merged["sched_tz"] = os.getenv("SCHED_TZ")
-    if "REGIONS" in os.environ:
-        merged["regions"] = [r.strip() for r in os.getenv("REGIONS","").split(",") if r.strip()]
-    if "FETCH_DATE_MODE" in os.environ:
-        merged["fetch_date_mode"] = os.getenv("FETCH_DATE_MODE")
 
     return Settings(**merged)
 

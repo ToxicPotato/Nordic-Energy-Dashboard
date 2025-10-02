@@ -1,4 +1,14 @@
 default:
+  # --- DB ---
+  DB_USER: "app"
+  DB_PASS: "app"
+  DB_HOST: "localhost"
+  DB_PORT: 5432
+  DB_NAME: "power"
+  DB_DRIVER: "psycopg"   # eller "psycopg2"
+  # DATABASE_URL: "postgresql+psycopg://app:app@localhost:5432/power"
+
+  # --- Scheduler ---
   enable_scheduler: false
   schedule_cron: "0 13 * * *"   # daglig 13:00 UTC
   sched_tz: "UTC"
@@ -8,3 +18,4 @@ default:
 dev:
   enable_scheduler: true
   schedule_cron: "*/1 * * * *"
+

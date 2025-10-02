@@ -50,7 +50,7 @@ def get_prices_last_hours(region: str, hours: int) -> list[dict]:
             .limit(hours)
         )
         rows = s.execute(q).scalars().all()
-        rows.reverse()  # stigende tid
+        rows.reverse()
         return [_row_to_dict(r) for r in rows]
 
 def get_prices_between(region: str, start_utc: datetime, end_utc: datetime) -> list[dict]:
