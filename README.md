@@ -30,6 +30,12 @@ uvicorn backend.main:app --reload
 ```
 - Swagger UI: http://127.0.0.1:8000/docs
 
+### 5) Run Frontend
+```bash
+cd frontend
+npm run dev
+```
+- Website UI: http://localhost:5173
 
 ## Directory Structure
 
