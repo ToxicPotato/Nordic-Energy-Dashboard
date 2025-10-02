@@ -9,7 +9,7 @@ default:
   # DATABASE_URL: "postgresql+psycopg://app:app@localhost:5432/power"
 
   # --- Scheduler ---
-  enable_scheduler: false
+  enable_scheduler: true
   schedule_cron: "0 13 * * *"   # daglig 13:00 UTC
   sched_tz: "UTC"
   regions: ["NO1", "NO2", "NO3", "NO4", "NO5"]

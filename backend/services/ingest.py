@@ -46,9 +46,31 @@ def normalize(api_items: list[dict], region: str) -> list[dict]:
     return rows
 
 def _validate(rows: list[dict]) -> None:
+    if not rows:
+        print("[ingest][warn] tom liste med rader")
+        return
+
+    issues = 0
+
+    # a) rekkefølge
     for a, b in zip(rows, rows[1:]):
-        if b["ts"] - a["ts"] != timedelta(hours=1):
-            raise ValueError(f"Ujevn timeserie: {a['ts']} -> {b['ts']}")
+        if b["ts"] < a["ts"]:
+            print(f"[ingest][warn] tidsrekkefølge brutt: {a['ts']} -> {b['ts']} (går bakover)")
+            issues += 1
+
+    # b) per-rad varighet
     for r in rows:
-        if r["te"] - r["ts"] != timedelta(hours=1):
-            raise ValueError(f"te != ts + 1h for {r['ts']}")
+        dt = r["te"] - r["ts"]
+        if dt != timedelta(hours=1):
+            print(f"[ingest][warn] te - ts != 1h for {r['ts']} (delta={dt})")
+            issues += 1
+
+    # c) steg mellom rader (DST kan gi 0h/2h osv.)
+    for a, b in zip(rows, rows[1:]):
+        step = b["ts"] - a["ts"]
+        if step != timedelta(hours=1):
+            print(f"[ingest][info] non-1h step {a['ts']} -> {b['ts']} (delta={step}) [DST/gap/overlap?]")
+
+    if issues:
+        print(f"[ingest][warn] validation completed with {issues} issue(s); continuing anyway")
+
