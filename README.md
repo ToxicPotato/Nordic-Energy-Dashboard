@@ -2,39 +2,60 @@
 
 A small, holistic project: fetches hourly electricity prices from a public source, stores them locally, and exposes them via an API which the frontend displays in a simple dashboard.
 
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/img/Dashboard-dark.png" alt="Dashboard – Dark theme" width="100%"><br>
+      <em>Figur 1: Dashboard dark mode</em>
+    </td>
+    <td align="center">
+      <img src="docs/img/Dashboard-light.png" alt="Dashboard – Light theme" width="100%"><br>
+      <em>Figur 2: Dashboard light mode</em>
+    </td>
+  </tr>
+</table>
+
 ## Quick start (development)
 
 **Prerequisites**z
+
 - Python 3.11+
 - Docker Desktop (for local PostgreSQL)
 - `config.yaml` at the repo root (use `default` or set `APP_ENV=dev`)
 
 ### 1) Start PostgreSQL (Docker)
+
 ```bash
 docker compose up -d
 ```
 
 ### 2) Install Python dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
 ### 3) Initialize database tables (one-time)
+
 ```bash
 python -m backend.init_db
 ```
 
 ### 4) Run the API (FastAPI)
+
 ```bash
 uvicorn backend.main:app --reload
 ```
+
 - Swagger UI: http://127.0.0.1:8000/docs
 
 ### 5) Run Frontend
+
 ```bash
 cd frontend
 npm run dev
 ```
+
 - Website UI: http://localhost:5173
 
 ## Directory Structure
@@ -85,7 +106,7 @@ npm run dev
   _Contribute here when_: building UI components, fetching data from the API, or improving visualization/interactions.
 
 - **/scripts**  
-  Helper/CLI scripts for manual or batch operations (e.g., running ingest outside the scheduler). 
+  Helper/CLI scripts for manual or batch operations (e.g., running ingest outside the scheduler).
 
 - **/docs**  
   Project documentation: architecture notes, diagrams, and decision records (ADR).
@@ -130,7 +151,7 @@ flowchart TB
 
     %% API-rutere og lesing fra DB
 
-    CRUD  --> |read series / stats|PRICE 
+    CRUD  --> |read series / stats|PRICE
     CRUD --> |read regions|REGION
     DB --> CRUD
 
@@ -140,11 +161,12 @@ flowchart TB
 ```
 
 ### Step-by-step
-1. **Orchestration (two entry points)**
-  
-    - Automatic: `backend/scheduler.py` runs on a cron schedule from `config.yaml` and calls `backend/services/ingest.py`.
 
-    - Manual: `scripts/fetch_prices.py` can be run from the CLI and calls the same ingest functions.
+1. **Orchestration (two entry points)**
+
+   - Automatic: `backend/scheduler.py` runs on a cron schedule from `config.yaml` and calls `backend/services/ingest.py`.
+
+   - Manual: `scripts/fetch_prices.py` can be run from the CLI and calls the same ingest functions.
 
 2. **Ingest & normalization (backend/services/ingest.py)** fetches hourly prices from the public source. Raw data is normalized: timestamps are converted to UTC, each record is validated to a 1-hour interval (`te = ts + 1h`), and rows are sorted ascending.
 
@@ -152,11 +174,11 @@ flowchart TB
 
 4. **API layer** FastAPI in `backend/main.py` exposes:
 
-    - `GET /api/regions` (from `backend/api/regions.py`)
+   - `GET /api/regions` (from `backend/api/regions.py`)
 
-    - `GET /api/prices` (from `backend/api/prices.py`) — supports `hours` (last N hours) or `from` / `to` (time range), plus stats (avg/min/max/count) over a range.
-    
-    Endpoints read via `crud` from the database (time series and aggregates).
+   - `GET /api/prices` (from `backend/api/prices.py`) — supports `hours` (last N hours) or `from` / `to` (time range), plus stats (avg/min/max/count) over a range.
+
+   Endpoints read via `crud` from the database (time series and aggregates).
 
 5. **Frontend** The React client fetches data from the API (selected region/time window), renders a line chart and KPI cards (average/min/max), and lets the user switch region/period.
 
@@ -167,16 +189,19 @@ flowchart TB
 ## Contribution Notes (per part)
 
 **Add a new API endpoint:**
+
 - Model/CRUD in `/backend/models.py` + `/backend/crud.py`
 - Route in `/backend/api/...`
 - Update README for major changes
 
 **Extend frontend:**
+
 - Create a new component in `/frontend/src/components`
 - Fetch data via a small API helper (keep URLs together)
 - Add simple loading/error handling in the UI
 
 **New ingest or data source:**
+
 - Create a new script in `/scripts` (preferably with a small --help)
 - Reuse validation/normalization, and write idempotently to DB
 - Briefly document in README what the script does
